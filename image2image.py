@@ -261,14 +261,22 @@ if __name__ == "__main__":
     # Create output directory if it doesn't exist
     os.makedirs("generated", exist_ok=True)
 
+    # Sanitize prompt for filename (remove invalid characters)
+    import re
+    safe_prompt = re.sub(r'[<>:"/\\|?*]', '', PROMPT.replace(' ', '_'))[:50]
     filename_prefix = os.path.join(
         "generated",
-        f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{model}_{PROMPT.replace(' ', '_')[:50]}"
+        f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{model}_{safe_prompt}"
     )
 
     try:
         for idx, item in enumerate(response_json['data']):
-            b64_img = item['b64_json']
+            # Handle different response formats: 'b64_json' (GPT/FLUX) or 'b64' (some APIs)
+            b64_img = item.get('b64_json') or item.get('b64')
+            if not b64_img:
+                print(f"Error: No image data found in response item {idx}")
+                print(f"Item keys: {item.keys()}")
+                continue
             filename = f"{filename_prefix}_{idx+1}.png"
             image = Image.open(BytesIO(base64.b64decode(b64_img)))
             image.show()
