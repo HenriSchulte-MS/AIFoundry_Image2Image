@@ -12,7 +12,7 @@ This sample performs image edits using Azure AI Foundry image models. It support
 	- `gpt-image-1.5`
 	- `FLUX.2-pro`
 
-Note: Use a Foundry project and note the endpoint and key.
+Note: Use a Foundry project and note the endpoint. You can authenticate with either an API key or Azure CLI (`az login`).
 
 ### Set up
 1) Clone this repo and open the folder in VS Code.
@@ -20,7 +20,7 @@ Note: Use a Foundry project and note the endpoint and key.
 
 ```
 FOUNDRY_ENDPOINT=https://<your-project-endpoint>.services.ai.azure.com/
-FOUNDRY_API_KEY=<your-project-api-key>
+FOUNDRY_API_KEY=<your-project-api-key>  # Optional: omit to use Azure CLI auth
 FOUNDRY_API_VERSION=2025-04-01-preview
 FLUX_DEPLOYMENT_NAME=FLUX.2-pro
 GPT_DEPLOYMENT_NAME=gpt-image-1.5
@@ -31,6 +31,8 @@ PROMPT=<Your edit prompt>
 MAX_IMAGE_MP=4.0
 MAX_IMAGE_DIMENSION=2048
 ```
+
+**Authentication:** If `FOUNDRY_API_KEY` is set, it will be used. Otherwise the script falls back to Azure CLI credentials — make sure you've run `az login` first.
 
 3) (Optional but recommended) Create a virtual environment and activate it.
 4) Install dependencies:
