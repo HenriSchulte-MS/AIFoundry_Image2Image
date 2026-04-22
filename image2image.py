@@ -35,10 +35,28 @@ else:
         token = credential.get_token("https://cognitiveservices.azure.com/.default").token
         return {"Authorization": f"Bearer {token}"}
 
-# Maximum image size limits (in megapixels)
-# FLUX supports up to 4MP, using 4MP for max quality
-MAX_IMAGE_MP = float(os.getenv("MAX_IMAGE_MP", "4.0"))  # Default 4MP (FLUX maximum)
-MAX_IMAGE_DIMENSION = int(os.getenv("MAX_IMAGE_DIMENSION", "2048"))  # Max dimension in pixels
+# Hard API limits per model (do not exceed - server will reject):
+#   FLUX.2-pro:  4.00 MP, max edge 2048
+#   gpt-image-2: 8.29 MP, max edge 3840 (8,294,400 px / 3840 px)
+#   gpt-image-1.5: fixed size list; resize is bypassed (size=auto sent to API)
+FLUX_HARD_MAX_MP = 4.0
+FLUX_HARD_MAX_DIMENSION = 2048
+GPT_HARD_MAX_MP = 8.29
+GPT_HARD_MAX_DIMENSION = 3840
+
+# Optional user overrides via env. Treated as an *upper hint* and clamped to
+# each model's hard limit so the API never receives an oversize image.
+_ENV_MAX_MP = float(os.getenv("MAX_IMAGE_MP")) if os.getenv("MAX_IMAGE_MP") else None
+_ENV_MAX_DIM = int(os.getenv("MAX_IMAGE_DIMENSION")) if os.getenv("MAX_IMAGE_DIMENSION") else None
+
+FLUX_MAX_MP = min(_ENV_MAX_MP, FLUX_HARD_MAX_MP) if _ENV_MAX_MP else FLUX_HARD_MAX_MP
+FLUX_MAX_DIMENSION = min(_ENV_MAX_DIM, FLUX_HARD_MAX_DIMENSION) if _ENV_MAX_DIM else FLUX_HARD_MAX_DIMENSION
+GPT_MAX_MP = min(_ENV_MAX_MP, GPT_HARD_MAX_MP) if _ENV_MAX_MP else GPT_HARD_MAX_MP
+GPT_MAX_DIMENSION = min(_ENV_MAX_DIM, GPT_HARD_MAX_DIMENSION) if _ENV_MAX_DIM else GPT_HARD_MAX_DIMENSION
+
+# Backwards-compatible defaults used by image_to_base64 / generic callers (FLUX limits).
+MAX_IMAGE_MP = FLUX_MAX_MP
+MAX_IMAGE_DIMENSION = FLUX_MAX_DIMENSION
 
 
 def resize_image_if_needed(image_path: str, max_mp: float = MAX_IMAGE_MP, 
@@ -152,9 +170,13 @@ def call_gpt_image_edit(client_endpoint: str, api_version: str,
     """
     edit_url = f"{client_endpoint}openai/deployments/{deployment}/images/edits?api-version={api_version}"
 
-    # Resize image if needed before upload (yields multiples of 16, <= 4MP)
+    # Resize image if needed before upload (yields multiples of 16).
+    # Use gpt-image-2's larger limits (3840 max edge, ~8.29MP) to maximize quality.
     print(f"  Processing input image: {image_path}")
-    image_bytes, width, height = resize_image_if_needed(image_path)
+    print(f"  Max input size: {GPT_MAX_DIMENSION}px edge / {GPT_MAX_MP}MP")
+    image_bytes, width, height = resize_image_if_needed(
+        image_path, max_mp=GPT_MAX_MP, max_dimension=GPT_MAX_DIMENSION
+    )
 
     # Compute an input-matching size string if it satisfies gpt-image-2 limits.
     total_pixels = width * height
