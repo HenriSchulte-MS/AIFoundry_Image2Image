@@ -13,6 +13,8 @@ load_dotenv()
 
 # Read environment variables
 FOUNDRY_ENDPOINT = os.getenv("FOUNDRY_ENDPOINT")
+if FOUNDRY_ENDPOINT and not FOUNDRY_ENDPOINT.endswith("/"):
+    FOUNDRY_ENDPOINT += "/"
 FOUNDRY_API_KEY = os.getenv("FOUNDRY_API_KEY")  # Optional: use API key instead of az cli
 FOUNDRY_API_VERSION = os.getenv("FOUNDRY_API_VERSION", "2025-04-01-preview")
 FLUX_DEPLOYMENT_NAME = os.getenv("FLUX_DEPLOYMENT_NAME")
