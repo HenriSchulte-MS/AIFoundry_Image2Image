@@ -5,6 +5,7 @@ from PIL import Image
 from io import BytesIO
 from datetime import datetime
 from dotenv import load_dotenv
+from azure.identity import AzureCliCredential
 import argparse
 import time
 
@@ -12,13 +13,25 @@ load_dotenv()
 
 # Read environment variables
 FOUNDRY_ENDPOINT = os.getenv("FOUNDRY_ENDPOINT")
-FOUNDRY_API_KEY = os.getenv("FOUNDRY_API_KEY")
+FOUNDRY_API_KEY = os.getenv("FOUNDRY_API_KEY")  # Optional: use API key instead of az cli
 FOUNDRY_API_VERSION = os.getenv("FOUNDRY_API_VERSION", "2025-04-01-preview")
 FLUX_DEPLOYMENT_NAME = os.getenv("FLUX_DEPLOYMENT_NAME")
 GPT_DEPLOYMENT_NAME = os.getenv("GPT_DEPLOYMENT_NAME")
 INPUT_IMAGE = os.getenv("INPUT_IMAGE")
 INPUT_IMAGE_2 = os.getenv("INPUT_IMAGE_2")  # Optional second image for Flux-2
 PROMPT = os.getenv("PROMPT")
+
+# Auth: use API key if provided, otherwise fall back to az cli credential
+if FOUNDRY_API_KEY:
+    print("Using API key authentication.")
+    def get_auth_headers() -> dict:
+        return {"api-key": FOUNDRY_API_KEY}
+else:
+    print("No FOUNDRY_API_KEY set, using Azure CLI credential.")
+    credential = AzureCliCredential()
+    def get_auth_headers() -> dict:
+        token = credential.get_token("https://cognitiveservices.azure.com/.default").token
+        return {"Authorization": f"Bearer {token}"}
 
 # Maximum image size limits (in megapixels)
 # FLUX supports up to 4MP, using 4MP for max quality
@@ -116,7 +129,7 @@ def get_resized_image_bytes(image_path: str) -> bytes:
     return image_bytes
 
 
-def call_gpt_image_edit(client_endpoint: str, api_key: str, api_version: str, 
+def call_gpt_image_edit(client_endpoint: str, api_version: str, 
                         deployment: str, image_path: str, prompt: str) -> dict:
     """Call the GPT Image Edit API using multipart/form-data."""
     edit_url = f"{client_endpoint}openai/deployments/{deployment}/images/edits?api-version={api_version}"
@@ -143,13 +156,13 @@ def call_gpt_image_edit(client_endpoint: str, api_key: str, api_version: str,
     }
     response = requests.post(
         edit_url,
-        headers={"api-key": api_key},
+        headers=get_auth_headers(),
         files=files,
     )
     return response.json()
 
 
-def call_flux_image_edit(client_endpoint: str, api_key: str, api_version: str,
+def call_flux_image_edit(client_endpoint: str, api_version: str,
                          deployment: str, image_path: str, prompt: str,
                          image_path_2: str = None,
                          image_path_3: str = None,
@@ -204,7 +217,7 @@ def call_flux_image_edit(client_endpoint: str, api_key: str, api_version: str,
         edit_url,
         headers={
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {api_key}",
+            **get_auth_headers(),
         },
         json=request_body,
         timeout=300,  # 5 minute timeout for image generation
@@ -241,12 +254,12 @@ if __name__ == "__main__":
     # Call the appropriate API based on model selection
     if model == "gpt":
         response_json = call_gpt_image_edit(
-            FOUNDRY_ENDPOINT, FOUNDRY_API_KEY, FOUNDRY_API_VERSION,
+            FOUNDRY_ENDPOINT, FOUNDRY_API_VERSION,
             deployment, INPUT_IMAGE, PROMPT
         )
     else:
         response_json = call_flux_image_edit(
-            FOUNDRY_ENDPOINT, FOUNDRY_API_KEY, FOUNDRY_API_VERSION,
+            FOUNDRY_ENDPOINT, FOUNDRY_API_VERSION,
             deployment, INPUT_IMAGE, PROMPT, INPUT_IMAGE_2
         )
 
