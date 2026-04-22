@@ -133,34 +133,91 @@ def get_resized_image_bytes(image_path: str) -> bytes:
 
 def call_gpt_image_edit(client_endpoint: str, api_version: str, 
                         deployment: str, image_path: str, prompt: str) -> dict:
-    """Call the GPT Image Edit API using multipart/form-data."""
+    """Call the GPT Image Edit API using multipart/form-data.
+
+    Auto-detects which gpt-image variant the deployment is backed by, with no
+    user configuration required:
+
+    1. First attempt uses gpt-image-2-optimized parameters: input-matching
+       `size` for max fidelity (multiples of 16, max edge 3840, ratio <= 3:1,
+       total pixels in [655,360, 8,294,400]); no `input_fidelity` (gpt-image-2
+       rejects it).
+    2. If the API returns a 400 error indicating an unsupported parameter or
+       size (typical for gpt-image-1 / gpt-image-1.5), automatically retries
+       with `size="auto"` and `input_fidelity="high"`.
+
+    Other parameters (`quality=high`, `output_format`, `output_compression`,
+    `moderation`, `n`) are sent on both attempts and are configurable via env
+    vars.
+    """
     edit_url = f"{client_endpoint}openai/deployments/{deployment}/images/edits?api-version={api_version}"
-    
-    # GPT image edit supports specific sizes: 256x256, 512x512, 1024x1024, 1536x1536, 
-    # 1792x1024, 1024x1792, or "auto"
-    # Using "auto" to let the API determine best size based on input
-    form_data = {
-        "prompt": (None, prompt),
-        "model": (None, deployment),
-        "size": (None, "auto"),  # Let API determine size based on input
-        "n": (None, "1"),
-        "input_fidelity": (None, "high"),
-        "quality": (None, "high"),
-    }
-    
-    # Resize image if needed before upload
+
+    # Resize image if needed before upload (yields multiples of 16, <= 4MP)
     print(f"  Processing input image: {image_path}")
-    image_bytes = get_resized_image_bytes(image_path)
-    
-    files = {
-        **form_data,
-        "image": (os.path.basename(image_path), image_bytes, "image/png"),
-    }
-    response = requests.post(
-        edit_url,
-        headers=get_auth_headers(),
-        files=files,
-    )
+    image_bytes, width, height = resize_image_if_needed(image_path)
+
+    # Compute an input-matching size string if it satisfies gpt-image-2 limits.
+    total_pixels = width * height
+    long_edge = max(width, height)
+    short_edge = min(width, height)
+    if (
+        long_edge <= 3840
+        and width % 16 == 0 and height % 16 == 0
+        and 655_360 <= total_pixels <= 8_294_400
+        and (long_edge / short_edge) <= 3.0
+    ):
+        preferred_size = f"{width}x{height}"
+    else:
+        preferred_size = "auto"
+
+    output_format = os.getenv("GPT_OUTPUT_FORMAT", "png").lower()
+    output_compression = os.getenv("GPT_OUTPUT_COMPRESSION")  # only valid for jpeg/webp
+    moderation = os.getenv("GPT_MODERATION", "auto").lower()
+    n_images = os.getenv("GPT_N", "1")
+
+    def build_form(size_value: str, include_input_fidelity: bool) -> dict:
+        form = {
+            "prompt": (None, prompt),
+            "model": (None, deployment),
+            "size": (None, size_value),
+            "n": (None, str(n_images)),
+            "quality": (None, "high"),
+            "output_format": (None, output_format),
+            "moderation": (None, moderation),
+        }
+        if include_input_fidelity:
+            form["input_fidelity"] = (None, "high")
+        if output_compression and output_format in ("jpeg", "webp"):
+            form["output_compression"] = (None, str(output_compression))
+        form["image"] = (os.path.basename(image_path), image_bytes, "image/png")
+        return form
+
+    def post(form: dict) -> requests.Response:
+        return requests.post(
+            edit_url,
+            headers=get_auth_headers(),
+            files=form,
+            timeout=300,
+        )
+
+    # Attempt 1: gpt-image-2-style request.
+    print(f"  Requesting output size: {preferred_size} (gpt-image-2 mode)")
+    response = post(build_form(preferred_size, include_input_fidelity=False))
+
+    # Detect parameter/size incompatibility errors and retry with safe params.
+    if response.status_code == 400:
+        try:
+            err = response.json().get("error", {}) or {}
+        except ValueError:
+            err = {}
+        err_text = (str(err.get("message", "")) + " " + str(err.get("param", ""))).lower()
+        looks_like_version_mismatch = any(
+            token in err_text for token in ("size", "input_fidelity", "unsupported", "unknown parameter", "invalid")
+        )
+        if looks_like_version_mismatch:
+            print(f"  gpt-image-2 params rejected (\"{err.get('message', '')[:120]}\"); retrying with legacy params")
+            response = post(build_form("auto", include_input_fidelity=True))
+
     return response.json()
 
 

@@ -63,4 +63,17 @@ Images exceeding these limits are downscaled while preserving aspect ratio. Dime
 
 **Output sizes:**
 - **FLUX**: Matches input dimensions (up to 4MP after resizing)
-- **GPT**: Uses predefined sizes (max 1792×1024 or 1536×1536 with `size="auto"`)
+- **GPT**: First attempts an input-matching size optimized for `gpt-image-2`; if the deployment is backed by an older model that rejects those parameters, automatically retries with `size="auto"` and `input_fidelity=high`. No configuration required.
+
+### GPT options (optional env vars)
+
+These affect the `gpt` model path. Defaults preserve current behavior.
+
+- **`GPT_OUTPUT_FORMAT`** – `png` (default), `jpeg`, or `webp`.
+- **`GPT_OUTPUT_COMPRESSION`** – 0–100, only applied for `jpeg`/`webp`.
+- **`GPT_MODERATION`** – `auto` (default) or `low`.
+- **`GPT_N`** – number of variants per request (default `1`).
+
+Notes:
+- The script auto-detects whether your deployment supports gpt-image-2-style parameters; no model-version env var is needed.
+- `gpt-image-2` does not support transparent backgrounds and does not allow configuring `input_fidelity`.
