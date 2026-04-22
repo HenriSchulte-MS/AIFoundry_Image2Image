@@ -230,7 +230,7 @@ if __name__ == "__main__":
     # Parse model selection argument
     parser = argparse.ArgumentParser(description="Image to Image Processing with AIFoundry")
     parser.add_argument("-model", "--model", dest="model", type=str, 
-                        help="Model to use: 'gpt' (gpt-image-1.5) or 'flux' (FLUX.2-pro)")
+                        help="Model to use: 'gpt' (gpt-image-2) or 'flux' (FLUX.2-pro)")
     args = parser.parse_args()
 
     if args.model:

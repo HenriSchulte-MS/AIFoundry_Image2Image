@@ -3,13 +3,13 @@
 ## Image Editing with Azure AI Foundry
 
 This sample performs image edits using Azure AI Foundry image models. It supports:
-- GPT-Image-1.5
+- GPT-Image-2
 - FLUX.2-pro
 
 ### Prerequisites
 - An Azure subscription and access to Azure AI Foundry
 - Deploy at least one of these models in Azure AI Foundry:
-	- `gpt-image-1.5`
+	- `gpt-image-2`
 	- `FLUX.2-pro`
 
 Note: Use a Foundry project and note the endpoint. You can authenticate with either an API key or Azure CLI (`az login`).
@@ -23,7 +23,7 @@ FOUNDRY_ENDPOINT=https://<your-project-endpoint>.services.ai.azure.com/
 FOUNDRY_API_KEY=<your-project-api-key>  # Optional: omit to use Azure CLI auth
 FOUNDRY_API_VERSION=2025-04-01-preview
 FLUX_DEPLOYMENT_NAME=FLUX.2-pro
-GPT_DEPLOYMENT_NAME=gpt-image-1.5
+GPT_DEPLOYMENT_NAME=gpt-image-2
 INPUT_IMAGE=<path to your image with file ending>
 PROMPT=<Your edit prompt>
 
@@ -49,7 +49,7 @@ python .\image2image.py
 ```
 
 Model selector values:
-- `-model gpt` selects `GPT_DEPLOYMENT_NAME` (e.g., `gpt-image-1.5`)
+- `-model gpt` selects `GPT_DEPLOYMENT_NAME` (e.g., `gpt-image-2`)
 - `-model flux` selects `FLUX_DEPLOYMENT_NAME` (e.g., `FLUX.2-pro`), which is also selected if no model argument is provided
 
 ### Image Processing
